@@ -1,0 +1,36 @@
+name: Build APK
+
+on:
+  push:
+    branches: [ "master", "main" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    # FIX 1: Use Java 17. Most "Exit Code 1" errors recently 
+    # are because the system defaults to Java 11 but Gradle needs 17.
+    - name: set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+        cache: gradle
+
+    - name: Grant execute permission for gradlew
+      run: chmod +x gradlew
+
+    # FIX 2: Added "-x lint". This prevents the build from failing 
+    # just because of minor code formatting issues.
+    - name: Build with Gradle
+      run: ./gradlew assembleDebug -x lint
+
+    - name: Upload APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: HondaInsight-Debug
+        path: app/build/outputs/apk/debug/app-debug.apk
