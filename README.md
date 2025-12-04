@@ -1,6 +1,12 @@
 # HONDAeInsight going HONDAe2MQTT
 A WIP Android App to read Real-Time-Data off of the Honda e via ODB2 [thanks to the work of DanielH1987](https://github.com/DanielH1987/HONDAeInsight) and publish it via MQTT.
 
+first tests by repurposing existing functions:
+- csv written to local storage
+- API key input field used for broker connection tcp://username:password@IP_ADDRESS:PORT
+
+
+
 
 from the original readme:
 
