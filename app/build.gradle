@@ -46,6 +46,9 @@ dependencies {
     // Bluetooth library
     implementation 'com.github.harry1453:android-bluetooth-serial:1.1.2'
 
+    // paho MQTT
+    implementation 'org.eclipse.paho:org.eclipse.paho.client.mqttv3:1.2.5'
+    
     // Testing
     testImplementation 'junit:junit:4.13.2'
     androidTestImplementation 'androidx.test:runner:1.6.2'
