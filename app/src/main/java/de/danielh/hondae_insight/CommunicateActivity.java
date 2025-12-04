@@ -354,25 +354,15 @@ public class CommunicateActivity extends AppCompatActivity implements LocationLi
                     }
                     writeLineToLogFile();
                     if (_sendDataToIternioRunning && _lastEpoch + 1 < _epoch) {
-                        final String requestString = "https://api.iternio.com/1/tlm/send?api_key=" + ITERNIO_API_KEY +
-                                "&token=" + _preferences.getString(USER_TOKEN_PREFS, "") +
-                                "&tlm=" +
-                                "{\"utc\":" + _epoch +
-                                ",\"soc\":" + _soc +
-                                ",\"soh\": " + _soh +
-                                ",\"speed\":" + _speed +
-                                ",\"lat\":" + _lat +
-                                ",\"lon\":" + _lon +
-                                ",\"elevation\":" + _elevation +
-                                ",\"is_charging\":" + _isCharging +
-                                ",\"is_dcfc\":" + _chargingConnection.getDcfc() +
-                                ",\"power\":" + _power +
-                                ",\"ext_temp\":" + _ambientTemp +
-                                ",\"batt_temp\":" + _batTemp +
-                                ",\"car_model\":" + "\"honda:e:20:36\"" +
-                                "}";
+                        // UPDATED FOR MQTT:
+                        // We don't need to build a URL string here anymore.
+                        // The new sendDataToIternoAPI method reads the variables (_soc, _speed, etc.) directly.
+                        
                         _lastEpoch = _epoch;
-                        new Thread(this::sendDataToIternoAPI, requestString).start();
+                        
+                        // Just start the thread. 
+                        // We use the simple constructor: new Thread(Runnable)
+                        new Thread(this::sendDataToIternoAPI).start();
                     }
                 } else {
                     setText(_messageText, "No new Message from CAN... wait" + String.valueOf(CAN_BUS_SCAN_INTERVALL) + "ms");
