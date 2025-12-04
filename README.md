@@ -1,5 +1,5 @@
 # HONDAeInsight going HONDAe2MQTT
-A WIP Android App to read Real-Time-Data off of the Honda e via ODB2 (thanks to the work of DanielH1987) and publish it via MQTT.
+A WIP Android App to read Real-Time-Data off of the Honda e via ODB2 [thanks to the work of DanielH1987](https://github.com/DanielH1987/HONDAeInsight) and publish it via MQTT.
 
 
 from the original readme:
@@ -19,4 +19,4 @@ OBDII-Adapter known to be working are:
 OBDII-Adapter not working:
 - ELM327-Clone
 
-Based heavily on https://github.com/harry1453/android-bluetooth-serial example App - Thanks!
+Based heavily on https://github.com/harry1453/android-bluetooth-serial example App - Thanks^2!
