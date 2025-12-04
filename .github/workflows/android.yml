@@ -23,20 +23,9 @@ jobs:
         distribution: 'temurin'
         cache: gradle
 
-    - name: Remove API Key Dependency
-      run: |
-        # 1. Create dummy google-services.json
-        # We still need this because the build system expects it, 
-        # but it won't be used for anything real.
-        echo '{"project_info":{"project_number":"0","project_id":"dummy"},"client":[{"client_info":{"mobilesdk_app_id":"1:0:android:mock","android_client_info":{"package_name":"de.danielh.hondae_insight"}},"api_key":[{"current_key":"mock"}]}]}' > app/google-services.json
-
-        # 2. Use 'sed' to edit the Java file automatically
-        # Delete the import line that causes the crash
-        sed -i '/import static de.danielh.hondae_insight.IternioApiKeyStore.ITERNIO_API_KEY;/d' app/src/main/java/de/danielh/hondae_insight/CommunicateActivity.java
-
-        # Replace the missing variable with a string so the code is valid
-        sed -i 's/ITERNIO_API_KEY/"DISABLED"/g' app/src/main/java/de/danielh/hondae_insight/CommunicateActivity.java
-
+    - name: Create Dummy Google Services
+      run: echo '{"project_info":{"project_number":"0","project_id":"dummy"},"client":[{"client_info":{"mobilesdk_app_id":"1:0:android:mock","android_client_info":{"package_name":"de.danielh.hondae_insight"}},"api_key":[{"current_key":"mock"}]}]}' > app/google-services.json
+        
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
 
