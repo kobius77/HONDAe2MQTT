@@ -606,7 +606,7 @@ public class CommunicateActivity extends AppCompatActivity implements LocationLi
             SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd-HH-mm-ss");
             Date now = new Date();
 
-            File logFile = new File(this.getExternalMediaDirs()[1], _vin + "-" + sdf.format(now) + ".csv");
+            File logFile = new File(this.getExternalMediaDirs()[0], _vin + "-" + sdf.format(now) + ".csv");
 
             logFile.createNewFile();
             //Log.d("FILE", logFile + " " + logFile.exists());
