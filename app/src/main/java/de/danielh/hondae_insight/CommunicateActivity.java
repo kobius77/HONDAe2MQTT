@@ -246,6 +246,22 @@ public class CommunicateActivity extends AppCompatActivity implements LocationLi
         checkExternalMedia();
     }
 
+    @Override
+    protected void onPause() {
+        super.onPause();
+        // SMART SAVE: Automatically save the MQTT URL whenever the user leaves the app
+        if (_preferences != null && _abrpUserTokenText != null) {
+            SharedPreferences.Editor edit = _preferences.edit();
+            String currentUrl = _abrpUserTokenText.getText().toString();
+            
+            // Only save if it's not empty
+            if (!currentUrl.isEmpty()) {
+                edit.putString(USER_TOKEN_PREFS, currentUrl);
+                edit.apply();
+            }
+        }
+    }
+    
     private void createNotificationChannel() {
         // Create the NotificationChannel, but only on API 26+ because
         // the NotificationChannel class is not in the Support Library.
