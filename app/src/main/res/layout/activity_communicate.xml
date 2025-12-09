@@ -32,7 +32,8 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:hint="@string/status_disconnected"
-            android:textSize="@dimen/text" />
+            android:textSize="@dimen/text"
+            android:textColor="#FFFFFF" />
 
         <Button
             android:id="@+id/communicate_connect"
@@ -539,7 +540,9 @@
                 android:inputType="text"
                 android:selectAllOnFocus="true"
                 android:textAlignment="center"
-                android:hint="tcp://user:pass@broker_address:1883" />
+                android:hint="tcp://user:pass@broker_address:1883"
+                android:textColor="#FFFFFF"      
+                android:textColorHint="#BBBBBB" />
 
             <LinearLayout
                 android:layout_width="match_parent"
