@@ -2,8 +2,10 @@
 A WIP Android App to read Real-Time-Data off of the Honda e via OBD2 ([thanks to the work of DanielH1987](https://github.com/DanielH1987/HONDAeInsight)) and publish it via MQTT.
 
 first tests by repurposing existing functions:
-- csv written to local storage
+- csv to be written to local storage
 - API key input field used for broker connection tcp://username:password@IP_ADDRESS:PORT
+- slowing down communication and prolong timeouts for higher reliablity of can-bus comms
+- optimizing UI logics for usability
 
 
 
