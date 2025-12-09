@@ -21,6 +21,7 @@ import android.widget.Checkable;
 import android.widget.EditText;
 import android.widget.Switch;
 import android.widget.TextView;
+import android.widget.ImageButton;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
@@ -223,6 +224,18 @@ public class CommunicateActivity extends AppCompatActivity implements LocationLi
 
         _connectButton = findViewById(R.id.communicate_connect);
 
+        // disconnectButton before status
+        ImageButton disconnectButton = findViewById(R.id.button_disconnect_device);
+        if (disconnectButton != null) {
+            disconnectButton.setOnClickListener(v -> {
+                // Stoppt den Loop, trennt Bluetooth und schließt die Activity
+                _loopRunning = false;
+                _viewModel.disconnect();
+                getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                finish();
+            });
+        }
+        
         // Start observing the data sent to us by the ViewModel
         _viewModel.getConnectionStatus().observe(this, this::onConnectionStatus);
         _viewModel.getDeviceName().observe(this, name -> setTitle(getString(R.string.device_name_format, name)));
@@ -787,11 +800,9 @@ private void loopMessagesToVariables() throws InterruptedException {
     // Called when the user presses the back button
     @Override
     public void onBackPressed() {
-        // Close the activity
-        _loopRunning = false;
-        _viewModel.disconnect();
-        getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-        finish();
+        // Schickt die App in den Hintergrund (wie Home-Button),
+        // hält aber die Verbindung und den Loop am Leben.
+        moveTaskToBack(true);
     }
 
     @Override
