@@ -633,6 +633,11 @@ public class CommunicateActivity extends AppCompatActivity implements LocationLi
             edit.putString(PREFS_KEY_MQTT_URL, urlText);
         }
         edit.apply();
+        
+        // if turned ON, force a fresh connection attempt
+        if (isChecked) {
+            restartMqtt();
+        }
     }
 
     private void parseVIN(String message) {
