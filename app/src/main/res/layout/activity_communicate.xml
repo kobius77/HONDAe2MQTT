@@ -532,7 +532,7 @@
                 android:layout_height="24dp" />
 
             <EditText
-                android:id="@+id/communicate_abrp_user_token"
+                android:id="@+id/communicate_mqtt_url"
                 android:layout_width="match_parent"
                 android:layout_height="48dp"
                 android:layout_weight="0"
@@ -560,7 +560,7 @@
                     android:textAppearance="@style/TextAppearance.AppCompat.Large" />
 
                 <Switch
-                    android:id="@+id/communicate_iternio_send_to_api"
+                    android:id="@+id/communicate_mqtt_switch"
                     android:layout_width="48dp"
                     android:layout_height="48dp"
                     android:textAlignment="textEnd"
