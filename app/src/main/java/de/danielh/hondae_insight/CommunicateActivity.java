@@ -11,15 +11,19 @@ import android.location.LocationManager;
 import android.os.Bundle;
 import android.os.Environment;
 import android.text.TextUtils;
+import android.view.KeyEvent;
 import android.view.MenuItem;
+import android.view.View;
 import android.view.WindowManager;
+import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.Checkable;
 import android.widget.EditText;
+import android.widget.ImageButton;
 import android.widget.Switch;
 import android.widget.TextView;
-import android.widget.ImageButton;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
@@ -35,10 +39,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.Locale;
-
-import android.view.inputmethod.EditorInfo;
-import android.view.inputmethod.InputMethodManager;
-import android.view.KeyEvent;
 
 // MQTT Imports
 import org.eclipse.paho.client.mqttv3.MqttClient;
@@ -62,11 +62,11 @@ public class CommunicateActivity extends AppCompatActivity implements LocationLi
 
     public static final int RANGE_ESTIMATE_WINDOW_5KM = 5;
 
-    // PREFERENCES KEYS (Renamed Constants, but keeping VALUES same to preserve user data)
+    // PREFERENCES KEYS
     private static final String PREFS_KEY_MQTT_URL = "abrp_user_token";
     private static final String PREFS_KEY_MQTT_SWITCH = "iternioSendToAPISwitch";
     
-    private static final int MAX_RETRY = 5; // Used for Bluetooth logic
+    private static final int MAX_RETRY = 5;
 
     private static final String NOTIFICATION_CHANNEL_ID = "SoC";
     private static final int NOTIFICATION_ID = 23;
@@ -98,7 +98,6 @@ public class CommunicateActivity extends AppCompatActivity implements LocationLi
             _socDashText, _batTempText, _batTempDeltaText, _ambientTempText, _sohText, _kwText, _ampText, _voltText, _auxBatText, _odoText,
             _rangeText, _chargingText, _speedText, _gpsStatusText, _apiStatusText;
     
-    // MQTT UI Elements (Renamed)
     private EditText _mqttUrlText;
     private Switch _mqttSwitch;
     
@@ -116,7 +115,7 @@ public class CommunicateActivity extends AppCompatActivity implements LocationLi
     private int _lastOdo = Integer.MIN_VALUE, _odo;
     
     private String _vin;
-    private String _lat = "0.0", _lon = "0.0"; // Needed for MQTT/Log
+    private String _lat = "0.0", _lon = "0.0";
     private String _gpsStatus = "No Fix";
     private double _elevation;
     
@@ -131,7 +130,7 @@ public class CommunicateActivity extends AppCompatActivity implements LocationLi
     
     private CommunicateViewModel _viewModel;
     private volatile boolean _loopRunning = false;
-    private volatile boolean _mqttRunning = false; // Was _sendDataToIternioRunning
+    private volatile boolean _mqttRunning = false;
     private volatile int _retries = 0;
     private boolean _carConnected = false;
     private byte _newMessage;
@@ -156,7 +155,7 @@ public class CommunicateActivity extends AppCompatActivity implements LocationLi
         String deviceName = getIntent().getStringExtra("device_name");
         String deviceMac = getIntent().getStringExtra("device_mac");
         
-        SharedPreferences prefs = getPreferences(MODE_PRIVATE); // Temp local var for clarity
+        SharedPreferences prefs = getPreferences(MODE_PRIVATE);
 
         if (deviceMac != null) {
             prefs.edit().putString("saved_device_name", deviceName)
@@ -192,7 +191,6 @@ public class CommunicateActivity extends AppCompatActivity implements LocationLi
         _vinText = findViewById(R.id.communicate_vin);
         _speedText = findViewById(R.id.communicate_speed);
         
-        // Corrected View Binding
         _gpsStatusText = findViewById(R.id.communicate_gps_status);
         _socMinText = findViewById(R.id.communicate_soc_min);
         _socMaxText = findViewById(R.id.communicate_soc_max);
@@ -213,25 +211,45 @@ public class CommunicateActivity extends AppCompatActivity implements LocationLi
         _apiStatusText = findViewById(R.id.communicate_api_status);
 
         // MQTT UI Setup
+        _mqttUrlText = findViewById(R.id.communicate_mqtt_url);
+        _mqttSwitch = findViewById(R.id.communicate_mqtt_switch);
+
+        // Handle "Enter" / "Done" on keyboard
         _mqttUrlText.setOnEditorActionListener((v, actionId, event) -> {
             if (actionId == EditorInfo.IME_ACTION_DONE ||
                 (event != null && event.getKeyCode() == KeyEvent.KEYCODE_ENTER && event.getAction() == KeyEvent.ACTION_DOWN)) {
 
-                // 1. Save the new URL immediately
+                // 1. Save settings
                 SharedPreferences.Editor edit = _preferences.edit();
                 edit.putString(PREFS_KEY_MQTT_URL, v.getText().toString());
                 edit.apply();
 
-                // 2. Hide Keyboard & Clear Focus
+                // 2. UI cleanup
                 v.clearFocus();
                 hideKeyboard();
 
-                // 3. FORCE Reconnect with new settings
+                // 3. Force Reconnect
                 restartMqtt();
                 return true;
             }
             return false;
         });
+
+        _mqttSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> handleMqttSwitch(isChecked));
+        _mqttSwitch.setChecked(_preferences.getBoolean(PREFS_KEY_MQTT_SWITCH, false));
+        _mqttUrlText.setText(_preferences.getString(PREFS_KEY_MQTT_URL, "tcp://"));
+
+        _connectButton = findViewById(R.id.communicate_connect);
+        
+        // Disconnect Button
+        ImageButton disconnectButton = findViewById(R.id.button_disconnect_device);
+        if (disconnectButton != null) {
+            disconnectButton.setOnClickListener(v -> {
+                _loopRunning = false;
+                _viewModel.disconnect();
+                getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                finish();
+            });
         }
 
         _viewModel.getConnectionStatus().observe(this, this::onConnectionStatus);
@@ -257,14 +275,13 @@ public class CommunicateActivity extends AppCompatActivity implements LocationLi
 
         checkExternalMedia();
         
-        // --- NEW: Connect to MQTT immediately on startup ---
+        // Connect to MQTT immediately on startup
         new Thread(this::connectToMqtt).start();
     }
 
     @Override
     protected void onPause() {
         super.onPause();
-        // Smart Save: Automatically save the MQTT URL whenever the user leaves the app
         if (_preferences != null && _mqttUrlText != null) {
             SharedPreferences.Editor edit = _preferences.edit();
             String currentUrl = _mqttUrlText.getText().toString();
@@ -277,7 +294,6 @@ public class CommunicateActivity extends AppCompatActivity implements LocationLi
 
     @Override
     protected void onDestroy() {
-        // Close MQTT connection politely
         try {
             if (_mqttClient != null && _mqttClient.isConnected()) {
                 _mqttClient.disconnect();
@@ -288,17 +304,41 @@ public class CommunicateActivity extends AppCompatActivity implements LocationLi
         super.onDestroy();
     }
 
-    // --- NEW MQTT CONNECTION METHOD ---
+    // --- HELPER METHODS ---
+
+    private void restartMqtt() {
+        new Thread(() -> {
+            try {
+                if (_mqttClient != null) {
+                    try {
+                        if (_mqttClient.isConnected()) _mqttClient.disconnect();
+                    } catch (Exception e) {}
+                    try { _mqttClient.close(); } catch (Exception e) {}
+                    _mqttClient = null; // Force recreation
+                }
+                connectToMqtt();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }).start();
+    }
+
+    private void hideKeyboard() {
+        View view = this.getCurrentFocus();
+        if (view != null) {
+            InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+            imm.hideSoftInputFromWindow(view.getWindowToken(), 0);
+        }
+    }
+
     private void connectToMqtt() {
         try {
-            // 1. Initialize Client if it doesn't exist yet
             if (_mqttClient == null) {
                 String rawInput = _preferences.getString(PREFS_KEY_MQTT_URL, "").trim();
                 String brokerUrl = rawInput;
                 String username = null;
                 String password = null;
 
-                // Parse Credentials (tcp://user:pass@host:port)
                 if (rawInput.contains("@") && rawInput.startsWith("tcp://")) {
                     try {
                         String withoutScheme = rawInput.substring(6);
@@ -316,11 +356,10 @@ public class CommunicateActivity extends AppCompatActivity implements LocationLi
                             }
                         }
                     } catch (Exception e) {
-                        brokerUrl = rawInput; // Fallback
+                        brokerUrl = rawInput;
                     }
                 }
 
-                // Setup Options
                 _mqttConnOpts = new MqttConnectOptions();
                 _mqttConnOpts.setCleanSession(true);
                 _mqttConnOpts.setConnectionTimeout(10); 
@@ -337,7 +376,6 @@ public class CommunicateActivity extends AppCompatActivity implements LocationLi
                 _mqttClient = new MqttClient(brokerUrl, clientId, new MemoryPersistence());
             }
 
-            // 2. Connect if not connected
             if (!_mqttClient.isConnected()) {
                 _mqttClient.connect(_mqttConnOpts);
                 setText(_apiStatusText, "🔵"); 
@@ -348,18 +386,14 @@ public class CommunicateActivity extends AppCompatActivity implements LocationLi
         }
     }
 
-    // --- REPURPOSED: PUBLISH ONLY ---
     private void publishMqttMessage() { 
         try {
-            // 1. Auto-Reconnect logic
             if (_mqttClient == null || !_mqttClient.isConnected()) {
                 connectToMqtt();
             }
 
-            // 2. Publish ONLY if connected
             if (_mqttClient != null && _mqttClient.isConnected()) {
                 String topic = "hondae/status";
-                
                 String payload = "{" +
                         "\"soc\":" + _soc +
                         ",\"soh\":" + _soh +
@@ -423,7 +457,7 @@ public class CommunicateActivity extends AppCompatActivity implements LocationLi
                             setText(_messageText, message);
                             _viewModel.setNewMessageProcessed();
                         }
-                        if (message.matches("\\d+\\.\\dV")) { //Aux Bat Voltage
+                        if (message.matches("\\d+\\.\\dV")) {
                             _auxBat = Double.parseDouble(message.substring(0, message.length() - 1));
                             setText(_auxBatText, message);
                         }
@@ -449,11 +483,9 @@ public class CommunicateActivity extends AppCompatActivity implements LocationLi
 
     private void loop() { 
         _loopRunning = true;
-        
         while (_loopRunning) {
             try {
                 _sysTimeMs = System.currentTimeMillis();
-                
                 loopMessagesToVariables();
 
                 _epoch = _sysTimeMs / 1000;
@@ -488,7 +520,6 @@ public class CommunicateActivity extends AppCompatActivity implements LocationLi
                     
                     writeLineToLogFile();
                     
-                    // MQTT Logic - Renamed Variable
                     if (_mqttRunning && _lastEpoch + 1 < _epoch) {
                         _lastEpoch = _epoch;
                         new Thread(this::publishMqttMessage).start();
@@ -502,11 +533,9 @@ public class CommunicateActivity extends AppCompatActivity implements LocationLi
 
             } catch (InterruptedException e) {
                 _loopRunning = false;
-                
             } catch (Exception e) {
                 String errorMsg = e.getMessage() != null ? e.getMessage() : "Unknown Error";
                 setText(_messageText, "Error: " + errorMsg + ". Retrying in " + (CAN_BUS_SCAN_INTERVALL/1000) + "s...");
-
                 try {
                     Thread.sleep(CAN_BUS_SCAN_INTERVALL);
                 } catch (InterruptedException ie) {
@@ -592,7 +621,7 @@ public class CommunicateActivity extends AppCompatActivity implements LocationLi
                             }
                             _newMessage++;
                         }
-                    } else if (message.matches("\\d+\\.\\dV")) { //Aux Bat Voltage
+                    } else if (message.matches("\\d+\\.\\dV")) {
                         _auxBat = Double.parseDouble(message.substring(0, message.length() - 1));
                         setText(_auxBatText, message);
                     }
@@ -634,7 +663,6 @@ public class CommunicateActivity extends AppCompatActivity implements LocationLi
         }
         edit.apply();
         
-        // if turned ON, force a fresh connection attempt
         if (isChecked) {
             restartMqtt();
         }
@@ -695,7 +723,6 @@ public class CommunicateActivity extends AppCompatActivity implements LocationLi
         try {
             SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd-HH-mm-ss");
             Date now = new Date();
-            // Using [0] for internal storage
             File logFile = new File(this.getExternalMediaDirs()[0], _vin + "-" + sdf.format(now) + ".csv");
             logFile.createNewFile();
             _logFileWriter = new PrintWriter(logFile);
@@ -732,41 +759,6 @@ public class CommunicateActivity extends AppCompatActivity implements LocationLi
         if (_logFileWriter != null) {
             _logFileWriter.flush();
             _logFileWriter.close();
-        }
-    }
-
-    // force the MQTT client to kill the old connection and build a new one
-    private void restartMqtt() {
-        new Thread(() -> {
-            try {
-                // If a client exists, kill it to ensure we don't use old settings
-                if (_mqttClient != null) {
-                    try {
-                        if (_mqttClient.isConnected()) {
-                            _mqttClient.disconnect();
-                        }
-                    } catch (Exception e) { /* ignore cleanup errors */ }
-                    
-                    try { _mqttClient.close(); } catch (Exception e) {}
-                    
-                    _mqttClient = null; // Vital: This forces connectToMqtt() to re-read the URL!
-                }
-                
-                // Now connect with the FRESH URL from the text box
-                connectToMqtt();
-                
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        }).start();
-    }
-
-    // utility to close the on-screen keyboard
-    private void hideKeyboard() {
-        android.view.View view = this.getCurrentFocus();
-        if (view != null) {
-            InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
-            imm.hideSoftInputFromWindow(view.getWindowToken(), 0);
         }
     }
 
