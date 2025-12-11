@@ -364,7 +364,7 @@
                         android:textColorHint="#666666"
                         android:textSize="14sp"
                         android:inputType="textUri"
-                        android:backgroundTint="#888888"
+                        android:imeOptions="actionDone"  android:backgroundTint="#888888"
                         android:layout_marginBottom="8dp"/>
 
                     <LinearLayout
