@@ -17,7 +17,6 @@ import android.view.View;
 import android.view.WindowManager;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodManager;
-import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.Checkable;
 import android.widget.CompoundButton;
@@ -25,14 +24,13 @@ import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.Switch;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.NotificationManagerCompat;
 import androidx.core.content.ContextCompat;
-import androidx.lifecycle.ViewModelProvider; // Updated from ViewModelProviders
+import androidx.lifecycle.ViewModelProvider;
 
 import java.io.File;
 import java.io.PrintWriter;
@@ -105,7 +103,7 @@ public class CommunicateActivity extends AppCompatActivity implements LocationLi
     
     private CheckBox _isChargingCheckBox;
     
-    // CHANGED: Replaced Button with Switch for Connection
+    // Switch for Connection
     private Switch _connectSwitch;
 
     // Data Variables
@@ -233,7 +231,7 @@ public class CommunicateActivity extends AppCompatActivity implements LocationLi
                 edit.putString(PREFS_KEY_MQTT_URL, v.getText().toString());
                 edit.apply();
 
-                // 2. UI cleanup - Pass the specific view to hide keyboard
+                // 2. UI cleanup
                 v.clearFocus();
                 hideKeyboard(v);
 
@@ -248,15 +246,16 @@ public class CommunicateActivity extends AppCompatActivity implements LocationLi
         _mqttSwitch.setChecked(_preferences.getBoolean(PREFS_KEY_MQTT_SWITCH, false));
         _mqttUrlText.setText(_preferences.getString(PREFS_KEY_MQTT_URL, "tcp://"));
 
-        // CHANGED: Use Switch for Connection Logic
+        // Connection Switch Setup
         _connectSwitch = findViewById(R.id.communicate_connect);
-        // We set the listener in 'onConnectionStatus' to avoid loops, or set a base one here:
+        // Set initial listener
         _connectSwitch.setOnCheckedChangeListener(this::handleConnectionSwitch);
         
-        // Disconnect Button (Icon in Toolbar?)
+        // Disconnect Button (Icon)
         ImageButton disconnectButton = findViewById(R.id.button_disconnect_device);
         if (disconnectButton != null) {
             disconnectButton.setOnClickListener(v -> {
+                // Manually stop everything
                 _loopRunning = false;
                 _viewModel.disconnect();
                 getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
@@ -291,17 +290,60 @@ public class CommunicateActivity extends AppCompatActivity implements LocationLi
         new Thread(this::connectToMqtt).start();
     }
 
-    // New helper to handle the connection switch user interaction
+    // --- FIX: Simplified Connection Switch Logic ---
     private void handleConnectionSwitch(CompoundButton buttonView, boolean isChecked) {
-        if (!buttonView.isPressed()) return; // Only react if user actually pressed it
-
         if (isChecked) {
-            // User wants to Connect
             _viewModel.connect();
         } else {
-            // User wants to Disconnect
             _viewModel.disconnect();
         }
+    }
+
+    // --- FIX: Robust Connection Status Logic ---
+    private void onConnectionStatus(CommunicateViewModel.ConnectionStatus connectionStatus) {
+        // 1. Detach listener to prevent loops
+        _connectSwitch.setOnCheckedChangeListener(null);
+
+        switch (connectionStatus) {
+            case CONNECTED:
+                _connectionText.setText(R.string.status_connected);
+                _connectSwitch.setChecked(true);
+                _connectSwitch.setEnabled(true);
+                
+                // 2. Prevent double threads
+                if (!_loopRunning) {
+                    new Thread(this::connectCAN).start();
+                }
+                break;
+
+            case CONNECTING:
+                _connectionText.setText(R.string.status_connecting);
+                _connectSwitch.setChecked(true);
+                _connectSwitch.setEnabled(true); // Allow user to cancel
+                _viewModel.setRetry(true);
+                break;
+
+            case DISCONNECTED:
+                _loopRunning = false; // Stop loop
+                _connectionText.setText(R.string.status_disconnected);
+                _connectSwitch.setChecked(false);
+                _connectSwitch.setEnabled(true);
+                closeLogFile();
+                _retries = 0;
+                break;
+
+            case RETRY:
+                _retries++;
+                if (_viewModel.isRetry() && _retries < MAX_RETRY) {
+                    _viewModel.connect();
+                } else {
+                    _viewModel.disconnect();
+                }
+                break;
+        }
+
+        // 3. Re-attach listener
+        _connectSwitch.setOnCheckedChangeListener(this::handleConnectionSwitch);
     }
 
     @Override
@@ -319,6 +361,9 @@ public class CommunicateActivity extends AppCompatActivity implements LocationLi
 
     @Override
     protected void onDestroy() {
+        // --- FIX: Stop loop to prevent phantom threads ---
+        _loopRunning = false; 
+
         try {
             if (_mqttClient != null && _mqttClient.isConnected()) {
                 _mqttClient.disconnect();
@@ -348,7 +393,6 @@ public class CommunicateActivity extends AppCompatActivity implements LocationLi
         }).start();
     }
 
-    // CHANGED: Improved Keyboard Hiding
     private void hideKeyboard(View view) {
         if (view != null) {
             InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
@@ -468,6 +512,9 @@ public class CommunicateActivity extends AppCompatActivity implements LocationLi
         try {
             setText(_apiStatusText, "⚪");
             for (String command : _connectionCommands) {
+                // IMPORTANT: Check loop state to exit early if disconnected
+                if (!_loopRunning) return;
+
                 synchronized (_viewModel.getNewMessageParsed()) {
                     _viewModel.sendMessage(command + "\n\r");
                     _viewModel.getNewMessageParsed().wait(WAIT_FOR_NEW_MESSAGE_TIMEOUT);
@@ -502,7 +549,8 @@ public class CommunicateActivity extends AppCompatActivity implements LocationLi
                 _viewModel.disconnect();
             }
         } catch (InterruptedException e) {
-            throw new RuntimeException(e);
+            // Thread interrupted, likely due to disconnect
+            _loopRunning = false;
         }
     }
 
@@ -573,6 +621,8 @@ public class CommunicateActivity extends AppCompatActivity implements LocationLi
 
     private void loopMessagesToVariables() throws InterruptedException {
         for (String command : _loopCommands) {
+            if (!_loopRunning) break; // Exit loop immediately if stopped
+
             synchronized (_viewModel.getNewMessageParsed()) {
                 _viewModel.sendMessage(command + "\n\r");
                 _viewModel.getNewMessageParsed().wait(WAIT_FOR_NEW_MESSAGE_TIMEOUT);
@@ -704,51 +754,6 @@ public class CommunicateActivity extends AppCompatActivity implements LocationLi
             output.append((char) Integer.parseInt(str, 16));
         }
         return output.toString();
-    }
-
-    // CHANGED: Logic to handle switch visual state vs actual connection actions
-    private void onConnectionStatus(CommunicateViewModel.ConnectionStatus connectionStatus) {
-        // Temporarily remove listener to prevent loops when we setChecked() programmatically
-        _connectSwitch.setOnCheckedChangeListener(null);
-
-        switch (connectionStatus) {
-            case CONNECTED:
-                _connectionText.setText(R.string.status_connected);
-                _connectSwitch.setChecked(true);
-                _connectSwitch.setEnabled(true);
-                // Optionally set text if your switch supports it, e.g., _connectSwitch.setText(R.string.disconnect);
-                
-                new Thread(this::connectCAN).start();
-                break;
-
-            case CONNECTING:
-                _connectionText.setText(R.string.status_connecting);
-                _connectSwitch.setChecked(true); // Keep it "On" while trying
-                _connectSwitch.setEnabled(false); // Disable interaction
-                _viewModel.setRetry(true);
-                break;
-
-            case DISCONNECTED:
-                _loopRunning = false;
-                _connectionText.setText(R.string.status_disconnected);
-                _connectSwitch.setChecked(false);
-                _connectSwitch.setEnabled(true);
-                closeLogFile();
-                _retries = 0;
-                break;
-
-            case RETRY:
-                _retries++;
-                if (_viewModel.isRetry() && _retries < MAX_RETRY) {
-                    _viewModel.connect();
-                } else {
-                    _viewModel.disconnect();
-                }
-                break;
-        }
-
-        // Re-attach listener
-        _connectSwitch.setOnCheckedChangeListener(this::handleConnectionSwitch);
     }
 
     private void openNewFileForWriting() {
