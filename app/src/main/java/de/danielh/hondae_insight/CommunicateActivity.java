@@ -299,8 +299,7 @@ public class CommunicateActivity extends AppCompatActivity implements LocationLi
         }
     }
 
-    // --- FIX: Robust Connection Status Logic ---
-    private void onConnectionStatus(CommunicateViewModel.ConnectionStatus connectionStatus) {
+private void onConnectionStatus(CommunicateViewModel.ConnectionStatus connectionStatus) {
         // 1. Detach listener to prevent loops
         _connectSwitch.setOnCheckedChangeListener(null);
 
@@ -310,8 +309,9 @@ public class CommunicateActivity extends AppCompatActivity implements LocationLi
                 _connectSwitch.setChecked(true);
                 _connectSwitch.setEnabled(true);
                 
-                // 2. Prevent double threads
+                // 2. Prevent double threads AND initialize the flag correctly
                 if (!_loopRunning) {
+                    _loopRunning = true; // <--- CRITICAL FIX: Set true BEFORE starting thread
                     new Thread(this::connectCAN).start();
                 }
                 break;
@@ -319,7 +319,7 @@ public class CommunicateActivity extends AppCompatActivity implements LocationLi
             case CONNECTING:
                 _connectionText.setText(R.string.status_connecting);
                 _connectSwitch.setChecked(true);
-                _connectSwitch.setEnabled(true); // Allow user to cancel
+                _connectSwitch.setEnabled(true); 
                 _viewModel.setRetry(true);
                 break;
 
@@ -345,7 +345,7 @@ public class CommunicateActivity extends AppCompatActivity implements LocationLi
         // 3. Re-attach listener
         _connectSwitch.setOnCheckedChangeListener(this::handleConnectionSwitch);
     }
-
+    
     @Override
     protected void onPause() {
         super.onPause();
